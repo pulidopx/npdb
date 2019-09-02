@@ -36,7 +36,7 @@ Create physical data in C:/npdb
   const schema = require('./schema.json');
   const npdb = require('npdb')(schema);
   
-  const find = async () => {
+  const create = async () => {
    const response = await npdb.create('user', data);
    console.log(response)
   }
