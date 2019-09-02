@@ -42,7 +42,7 @@ Create physical data in C:/npdb
   }
   
   const read = async () => {
-   const info = await npdb.read('competidores');
+   const info = await npdb.read('user');
    console.log(info)
   }
   
