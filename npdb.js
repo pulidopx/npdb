@@ -30,6 +30,14 @@ const unique = (db, cdata, schema, update) => {
                     }
                 }
             })
+
+            Object.keys(cdata).forEach(cd => {
+                if (currentSchema[cd].type !== typeof cdata[cd]) {
+                    const err = { message: 'Document type property is not valid "' + cd +'" - need ' + currentSchema[cd].type + ' type'}
+                    reject(err);
+                    throw err;
+                }
+            });
         }
     
         const id = Math.random().toString(36).slice(-9) + '-' + Math.random().toString(36).slice(-9);
@@ -73,7 +81,7 @@ const create = (db, data, schema, update) => {
     });
   };
   
-  const read = (db) => {
+  const read = (db, criteria = null) => {
     return new Promise((resolve, reject) => {
         const folderName = 'C:/npdb';
 
@@ -82,7 +90,37 @@ const create = (db, data, schema, update) => {
                 if (err) { reject(err); return;};
             
                 if (data !== 'undefined') {
-                    resolve(JSON.parse(data));
+
+                    if (criteria) {
+                        const document = JSON.parse(data);
+
+                        const range = [];
+
+                        for (let index = criteria.range.min; index < criteria.range.max + 1; index++) {
+                            range.push(index);                            
+                        }
+                        
+                        //console.log('range :', range);
+                        const where = (i) => {
+                            let isValid = false;
+                            const rang = range.find(r => r === i);
+                            
+                            if (rang || rang === 0) {
+                                console.log('object :', i, rang, range);
+                                isValid = true;
+                            }
+                            return isValid;
+                        }
+
+                        const res = {
+                            rows: document.filter((dt, i) => where(i)),
+                            count: document.filter((dt, i) => where(i)).length 
+                        }
+                                        
+                        resolve(res);
+                    } else {
+                        resolve(JSON.parse(data));
+                    }
                 } else {
                     resolve(false)
                 }
@@ -93,13 +131,26 @@ const create = (db, data, schema, update) => {
     })
   }
 
-  const find = (db, id) => {
+  const find = (db, criteria, projection = null) => {
     return new Promise((resolve, reject) => {
 
-    const folderName = 'C:/npdb';
+        const where = (data, criteria) => {
+            const properties = Object.keys(data);
+            let isValid = false;
+
+            properties.forEach(pr => {
+                if (data[pr] === criteria[pr]) {
+                    isValid = true;
+                }
+            });
+
+            return isValid;
+        }    
+
+        const folderName = 'C:/npdb';
         fs.readFile(`${folderName}/${db}.json`, (err, data) => {
             if (err) { reject(err); return;};
-            const filter = JSON.parse(data).filter(dt => dt.id === id);
+            const filter = JSON.parse(data).filter(dt => where(dt, criteria));
             resolve(filter);
         });
     })
@@ -153,15 +204,13 @@ const create = (db, data, schema, update) => {
 
             if (find && schemaValid) {
                 const rem = await removing(db, id);
-                console.log('rem :', rem);
+                // console.log('rem :', rem);
                 info = await created(db, cdata, schema, id);
 
                 resolve(info);
             } else {
                 reject(find ? error : 'The document property no exist');
             }
-            
-            
         });
     })
   }
