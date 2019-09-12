@@ -6,6 +6,13 @@ Create physical data in C:/npdb
 # ./schema.json
 
 ```ruby
+
+type properties accepted
+ - string
+ - object "arrays and objects"
+ - number
+ - boolean
+
 [
     {
         "user": {},
@@ -15,7 +22,7 @@ Create physical data in C:/npdb
             "require": true
         },
         "age": {
-            "type": "numeric"
+            "type": "number"
         }, 
         "gender": {
             "type": "string"
