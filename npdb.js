@@ -1,5 +1,6 @@
 'use strict';
 const fs = require('fs');
+let folderName = '';
 
 const unique = (db, cdata, schema, update) => {
     return new Promise(async(resolve, reject) => {
@@ -55,7 +56,6 @@ const unique = (db, cdata, schema, update) => {
 const create = (db, data, schema, update) => {
     return new Promise( async (resolve, reject) => {
         try {
-            const folderName = 'C:/npdb';
             let merge = {};
   
             if (!fs.existsSync(folderName)){
@@ -83,7 +83,6 @@ const create = (db, data, schema, update) => {
   
   const read = (db, criteria = null) => {
     return new Promise((resolve, reject) => {
-        const folderName = 'C:/npdb';
 
         if (fs.existsSync(`${folderName}/${db}.json`)) {
             fs.readFile(`${folderName}/${db}.json`, 'utf8', (err, data) => {
@@ -147,7 +146,6 @@ const create = (db, data, schema, update) => {
             return isValid;
         }    
 
-        const folderName = 'C:/npdb';
         fs.readFile(`${folderName}/${db}.json`, (err, data) => {
             if (err) { reject(err); return;};
             const filter = JSON.parse(data).filter(dt => where(dt, criteria));
@@ -158,7 +156,6 @@ const create = (db, data, schema, update) => {
 
   const remove = (db, id) => {
     return new Promise((resolve, reject) => {
-        const folderName = 'C:/npdb';
 
         fs.readFile(`${folderName}/${db}.json`, async (err, data) => {
             if (err) { reject(err); return;};
@@ -179,7 +176,6 @@ const create = (db, data, schema, update) => {
 
   const update = (db, id, cdata, schema) => {
     return new Promise((resolve, reject) => {
-        const folderName = 'C:/npdb';
         const removing = remove;
         const created = create;
         fs.readFile(`${folderName}/${db}.json`, async (err, data) => {
@@ -203,7 +199,7 @@ const create = (db, data, schema, update) => {
             let info = {};
 
             if (find && schemaValid) {
-                const rem = await removing(db, id);
+                await removing(db, id);
                 // console.log('rem :', rem);
                 info = await created(db, cdata, schema, id);
 
@@ -215,7 +211,9 @@ const create = (db, data, schema, update) => {
     })
   }
 
-  module.exports = (schema) => {
+  module.exports = (schema, path = 'C:/npdb') => {
+    folderName = path;
+
     return {
         create: (db, data) => create(db, data, schema),
         read,
