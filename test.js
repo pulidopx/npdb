@@ -5,6 +5,7 @@ const schema = [{
     name: {
       type: "string",
       require: true,
+      unique: true,
     },
     age: {
       type: "number",
@@ -16,7 +17,6 @@ const schema = [{
     },
     department: {
       type: "string",
-      unique: true,
       require: true,
     },
     car: {
@@ -39,12 +39,12 @@ const findComp = async () => {
 
 
 const updateComp = async () => {
-    const result = await npdb.update('users','7lhlidwan-7gtcczbzp', {
-        name: "JOSE ALCARAZ SANCHEZ",
-        age: 29,
-        gender: "Male",
-        department: "English",
-        car: "AVION"
+    const result = await npdb.update('users','196lsygkt-c0bn5mus4', {
+      "name": "JOSE ALCARAZ SAN AABB",
+      "age": 34,
+      "gender": "Male",
+      "department": "English",
+      "car": "AVION",
     });
 
     console.log('RES () :', result);
@@ -53,7 +53,7 @@ const updateComp = async () => {
 const createComp = async () => {
   try {
       const result = await npdb.create('users', {
-        name: "JOSE ALCARAZ SANCHEZ",
+        name: "JOSE ALCARAZ SAN AA",
         age: 29,
         gender: "Male",
         department: "English",
@@ -75,12 +75,53 @@ const readComp = async () => {
     });
 
     console.log('RES () :', result);
+};
+
+const multiUpdate = async () => {
+
+  try {
+    const result = await npdb.multiUpdate('users', [
+      'prafme9nj-9q1kphixr',
+      'a0u5xqvyk-wr00yzypo',
+      '196lsygkt-c0bn5mus4'
+    ], [
+      {
+        name: "JOSE ALCARAZ SANCHEZ ABDUL",
+        age: 29,
+        gender: "Male",
+        department: "English",
+        car: "AVION",
+        id: 'prafme9nj-9q1kphixr'
+      },
+      {
+        name: "JOSE ALCARAZ SANCHEZ EOEO",
+        age: 29,
+        gender: "Male",
+        department: "English",
+        car: "AVION",
+        id: 'a0u5xqvyk-wr00yzypo'
+      },
+      {
+        name: "JOSEPH ALWAYS EOEO",
+        age: 33,
+        gender: "Male",
+        department: "English",
+        car: "AVION",
+        id: '196lsygkt-c0bn5mus4'
+      }
+    ]);
+  
+    // console.log('RES', result);
+  } catch(err) {
+    console.log('error :', err);
+  }
 }
 
-createComp();
+multiUpdate();
+// createComp();
 // readComp();
-//updateComp();
-//findComp();
+// updateComp();
+// findComp();
 
 
 

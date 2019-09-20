@@ -105,7 +105,6 @@ const create = (db, data, schema, update) => {
                             const rang = range.find(r => r === i);
                             
                             if (rang || rang === 0) {
-                                console.log('object :', i, rang, range);
                                 isValid = true;
                             }
                             return isValid;
@@ -118,14 +117,14 @@ const create = (db, data, schema, update) => {
                                         
                         resolve(res);
                     } else {
-                        resolve(JSON.parse(data));
+                        resolve(data ? JSON.parse(data) : []);
                     }
                 } else {
-                    resolve(false)
+                    resolve([])
                 }
             });
         } else {
-            resolve(false)
+            resolve([])
         }
     })
   }
@@ -156,12 +155,18 @@ const create = (db, data, schema, update) => {
 
   const remove = (db, id) => {
     return new Promise((resolve, reject) => {
-
-        fs.readFile(`${folderName}/${db}.json`, async (err, data) => {
+        fs.readFile(`${folderName}/${db}.json`, 'utf8', async (err, data) => {
             if (err) { reject(err); return;};
-            const filter = JSON.parse(data).filter(dt => dt.id !== id);
+            const arr = [];
+            let filter = JSON.parse(data);
 
-            const fildt = JSON.stringify(filter, null, 2);
+            filter.forEach(e => {
+                if (e.id !== id) {
+                    arr.push(e);
+                }
+            })
+
+            const fildt = JSON.stringify(arr);
 
             fs.writeFile(`${folderName}/${db}.json`, fildt, (err) => {
                 if (err) reject(err);
@@ -174,6 +179,34 @@ const create = (db, data, schema, update) => {
     })
   }
 
+  const removePerOne = (db, ids) => {
+    return new Promise((resolve, reject) => {
+
+        fs.readFile(`${folderName}/${db}.json`, 'utf8', async (err, data) => {
+            if (err) { reject(err); return;};
+
+            const arr = [];
+
+            JSON.parse(data).forEach((e, i) => {
+                if (!ids.find(f => f === e.id)) {
+                    arr.push(e);
+                }
+            });
+
+            
+            let filter = arr;
+
+            const fildt = JSON.stringify(filter);
+
+            fs.writeFile(`${folderName}/${db}.json`, fildt, (err) => {
+                if (err) reject(err);
+                console.log('Data written to file');
+                resolve(filter)
+            });    
+        });
+    })   
+  }
+
   const update = (db, id, cdata, schema) => {
     return new Promise((resolve, reject) => {
         const removing = remove;
@@ -184,7 +217,7 @@ const create = (db, data, schema, update) => {
             let schemaValid = true;
             let error = '';
             const currentSchema = schema.find(sc => sc[db]);
-        
+
             Object.keys(currentSchema).forEach((k) => {
                 if (currentSchema[k].require) {
     
@@ -211,6 +244,112 @@ const create = (db, data, schema, update) => {
     })
   }
 
+  const multiCheck = (ids = [], putData, data, schema, db) => {
+      return new Promise((resolve, reject) => {
+        const arrayInfo = [];
+        ids.forEach(async (up, i) => {
+            const updateData = putData.find(pd => pd.id === up);
+            
+                if (updateData) {
+                    
+                    try {
+                        const find = JSON.parse(data).find(dt => dt.id === up);
+                        if (find) {
+                            delete updateData.id;
+                            unique(db, updateData, schema, up)
+                                .then(uniq => {
+                                    arrayInfo.push(uniq.info);
+                                    if ((ids.length - 1) === i) {
+                                        resolve(arrayInfo);
+                                    }
+                                })
+                                .catch(err => { console.log('err: ', err); });;
+                        } else {
+                            reject(find ? error : 'The document property no exist');
+                        }
+                    } catch(err) {
+                        console.log('error: ', err);
+                    }
+
+                }  
+        });
+      })
+  }
+
+  const multiUpdate = (db, ids, cdata, schema) => {
+    return new Promise((resolve, reject) => {
+        
+        const dataFinally = [];
+        const removing = removePerOne;
+        const putData = cdata;
+
+        let schemaValid = true;
+        let error = '';
+        const currentSchema = schema.find(sc => sc[db]);
+        
+        Object.keys(currentSchema).forEach((k) => {
+            if (currentSchema[k].require) {
+
+                cdata.forEach(e => {
+                    if (!e[k]) {
+                        schemaValid = false;
+                        error = { message: 'Document property, "' + k + '" - is required' }
+                    }
+                });
+            }
+        });
+
+        if (schemaValid) {
+            fs.readFile(`${folderName}/${db}.json`, 'utf8', async (err, data) => {
+                if (err) { reject(err); return;};
+
+                let validUnique = true;
+
+                Object.keys(currentSchema).forEach((key) => {
+                    if (currentSchema[key].unique) {
+                        cdata.forEach(e => {
+                            const exist = JSON.parse(data).find(dt => dt[key] === e[key]);
+
+                            if (exist) {
+                                const err = { message: 'Document repeat not allow : unique - ' + key}
+                                error = err;
+                                validUnique = false;
+                            }
+                        });
+                    }
+                })
+
+                if (validUnique) {
+                    try {
+                        removing(db, ids).then((removeData) => {
+                            
+                            multiCheck(ids, putData, data, schema, db)
+                            .then(data => {
+                                let setdata = JSON.stringify(data.concat(removeData), null, 2);
+                
+                                fs.writeFile(`${folderName}/${db}.json`, setdata, (err) => {
+                                    if (err) { reject(err); return;};
+                                    resolve(setdata)
+                                });
+                            })
+                            .catch(err => { console.log('error: ', err); });
+                        }).catch(err => { console.log('error: ', err); });;
+                    } catch (err) {
+                        console.log('error:', err);
+                        reject(err);
+                    }
+                } else {
+                    reject(error);
+                }
+            });
+            // resolve(dataFinally);
+        } else {
+            reject(error);
+        }
+        
+    });
+  }
+
   module.exports = (schema, path = 'C:/npdb') => {
     folderName = path;
 
@@ -221,5 +360,6 @@ const create = (db, data, schema, update) => {
         delete: remove,
         // -----
         find,
+        multiUpdate: (db, ids, data) => multiUpdate(db, ids, data, schema),
     }
   };
