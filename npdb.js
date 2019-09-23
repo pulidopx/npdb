@@ -247,44 +247,67 @@ const create = (db, data, schema, update) => {
   const multiCheck = (ids = [], putData, data, schema, db) => {
       return new Promise((resolve, reject) => {
         const arrayInfo = [];
+
         ids.forEach(async (up, i) => {
             const updateData = putData.find(pd => pd.id === up);
-            
                 if (updateData) {
-                    
                     try {
                         const find = JSON.parse(data).find(dt => dt.id === up);
                         
-                        if (find) {
-                            Object.keys(updateData).forEach(k => {
+                        Object.keys(updateData).forEach(k => {
+                            if (find[k]) {
+                                find[k] = updateData[k]
+                            }
+                        });
 
-                                if (find[k]) {
-                                    find[k] = updateData[k]
+                        delete find.id;
+                        delete find.created_date;
+                        delete find.updated_date;
+
+                        unique(db, find, schema, up)
+                            .then(uniq => {
+                                arrayInfo.push(uniq.info);
+                                if ((ids.length - 1) === i) {
+                                    resolve(arrayInfo);
                                 }
-                            });
-                            
-                            delete find.id;
-                            delete find.created_date;
-                            delete find.updated_date;
-
-                            unique(db, find, schema, up)
-                                .then(uniq => {
-                                    arrayInfo.push(uniq.info);
-                                    if ((ids.length - 1) === i) {
-                                        resolve(arrayInfo);
-                                    }
-                                })
-                                .catch(err => { console.log('err: ', err); });;
-                        } else {
-                            reject(find ? error : 'The document property no exist');
-                        }
+                            })
+                            .catch(err => { console.log('err: ', err); });
                     } catch(err) {
                         console.log('error: ', err);
+                        reject(err.message);
                     }
-
                 }  
-        });
+        });   
+    
       })
+  }
+
+  const checkDocumentProperties = (ids, putData, data) => {
+    let error = false;
+    let messageError = '';
+
+    ids.forEach((up) => {
+        const updateData = putData.find(pd => pd.id === up);
+        const find = JSON.parse(data).find(dt => dt.id === up);
+        if (find && updateData) {
+            Object.keys(updateData).forEach(k => {
+
+                if (!find[k]) {
+                    error = true;
+                    messageError = 'The current set property not exist in the file, try again with valid property data';
+                }
+            });
+        } else {
+            error = true;
+            if (updateData && updateData.id) {
+                messageError = `The id document ${updateData.id} not exist`;
+            } else {
+                messageError = 'Semantic error please check the ids properties';
+            }
+        }
+    });
+
+    return { error, messageError }
   }
 
   const multiUpdate = (db, ids, cdata, schema) => {
@@ -298,19 +321,25 @@ const create = (db, data, schema, update) => {
             if (err) { reject(err); return;};
 
             try {
-                removing(db, ids).then((removeData) => {
+                const check = checkDocumentProperties(ids, putData, data);
+
+                if (check.error) {
+                    reject(check.messageError);
+                } else {
+                    removing(db, ids).then((removeData) => {
                     
-                    multiCheck(ids, putData, data, schema, db)
-                    .then(data => {
-                        let setdata = JSON.stringify(data.concat(removeData), null, 2);
-        
-                        fs.writeFile(`${folderName}/${db}.json`, setdata, (err) => {
-                            if (err) { reject(err); return;};
-                            resolve(setdata)
-                        });
-                    })
-                    .catch(err => { console.log('error: ', err); });
-                }).catch(err => { console.log('error: ', err); });;
+                        multiCheck(ids, putData, data, schema, db)
+                        .then(data => {
+                            let setdata = JSON.stringify(data.concat(removeData), null, 2);
+            
+                            fs.writeFile(`${folderName}/${db}.json`, setdata, (err) => {
+                                if (err) { reject(err); return;};
+                                resolve(setdata)
+                            });
+                        })
+                        .catch(err => { console.log('error: ', err); reject(err) });
+                    }).catch(err => { console.log('error: ', err); reject(err) });   
+                }
             } catch (err) {
                 console.log('error:', err);
                 reject(err);

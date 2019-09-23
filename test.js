@@ -87,10 +87,11 @@ const multiUpdate = async () => {
     ], [
       {
         car: "AVION",
+        department: "Spanish",
         id: 'prafme9nj-9q1kphixr'
       },
       {
-        car: "Carro",
+        car: "AVIONETA",
         id: 'a0u5xqvyk-wr00yzypo'
       },
       {
