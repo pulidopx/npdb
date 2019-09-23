@@ -254,9 +254,20 @@ const create = (db, data, schema, update) => {
                     
                     try {
                         const find = JSON.parse(data).find(dt => dt.id === up);
+                        
                         if (find) {
-                            delete updateData.id;
-                            unique(db, updateData, schema, up)
+                            Object.keys(updateData).forEach(k => {
+
+                                if (find[k]) {
+                                    find[k] = updateData[k]
+                                }
+                            });
+                            
+                            delete find.id;
+                            delete find.created_date;
+                            delete find.updated_date;
+
+                            unique(db, find, schema, up)
                                 .then(uniq => {
                                     arrayInfo.push(uniq.info);
                                     if ((ids.length - 1) === i) {
@@ -279,73 +290,33 @@ const create = (db, data, schema, update) => {
   const multiUpdate = (db, ids, cdata, schema) => {
     return new Promise((resolve, reject) => {
         
-        const dataFinally = [];
         const removing = removePerOne;
         const putData = cdata;
-
-        let schemaValid = true;
-        let error = '';
-        const currentSchema = schema.find(sc => sc[db]);
         
-        Object.keys(currentSchema).forEach((k) => {
-            if (currentSchema[k].require) {
 
-                cdata.forEach(e => {
-                    if (!e[k]) {
-                        schemaValid = false;
-                        error = { message: 'Document property, "' + k + '" - is required' }
-                    }
-                });
+        fs.readFile(`${folderName}/${db}.json`, 'utf8', async (err, data) => {
+            if (err) { reject(err); return;};
+
+            try {
+                removing(db, ids).then((removeData) => {
+                    
+                    multiCheck(ids, putData, data, schema, db)
+                    .then(data => {
+                        let setdata = JSON.stringify(data.concat(removeData), null, 2);
+        
+                        fs.writeFile(`${folderName}/${db}.json`, setdata, (err) => {
+                            if (err) { reject(err); return;};
+                            resolve(setdata)
+                        });
+                    })
+                    .catch(err => { console.log('error: ', err); });
+                }).catch(err => { console.log('error: ', err); });;
+            } catch (err) {
+                console.log('error:', err);
+                reject(err);
             }
         });
 
-        if (schemaValid) {
-            fs.readFile(`${folderName}/${db}.json`, 'utf8', async (err, data) => {
-                if (err) { reject(err); return;};
-
-                let validUnique = true;
-
-                Object.keys(currentSchema).forEach((key) => {
-                    if (currentSchema[key].unique) {
-                        cdata.forEach(e => {
-                            const exist = JSON.parse(data).find(dt => dt[key] === e[key]);
-
-                            if (exist) {
-                                const err = { message: 'Document repeat not allow : unique - ' + key}
-                                error = err;
-                                validUnique = false;
-                            }
-                        });
-                    }
-                })
-
-                if (validUnique) {
-                    try {
-                        removing(db, ids).then((removeData) => {
-                            
-                            multiCheck(ids, putData, data, schema, db)
-                            .then(data => {
-                                let setdata = JSON.stringify(data.concat(removeData), null, 2);
-                
-                                fs.writeFile(`${folderName}/${db}.json`, setdata, (err) => {
-                                    if (err) { reject(err); return;};
-                                    resolve(setdata)
-                                });
-                            })
-                            .catch(err => { console.log('error: ', err); });
-                        }).catch(err => { console.log('error: ', err); });;
-                    } catch (err) {
-                        console.log('error:', err);
-                        reject(err);
-                    }
-                } else {
-                    reject(error);
-                }
-            });
-            // resolve(dataFinally);
-        } else {
-            reject(error);
-        }
         
     });
   }

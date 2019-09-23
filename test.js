@@ -86,32 +86,20 @@ const multiUpdate = async () => {
       '196lsygkt-c0bn5mus4'
     ], [
       {
-        name: "JOSE ALCARAZ SANCHEZ ABDUL",
-        age: 29,
-        gender: "Male",
-        department: "English",
         car: "AVION",
         id: 'prafme9nj-9q1kphixr'
       },
       {
-        name: "JOSE ALCARAZ SANCHEZ EOEO",
-        age: 29,
-        gender: "Male",
-        department: "English",
-        car: "AVION",
+        car: "Carro",
         id: 'a0u5xqvyk-wr00yzypo'
       },
       {
-        name: "JOSEPH ALWAYS EOEO",
-        age: 33,
-        gender: "Male",
-        department: "English",
-        car: "AVION",
+        car: "Tanque",
         id: '196lsygkt-c0bn5mus4'
       }
     ]);
   
-    // console.log('RES', result);
+    console.log('RES', result);
   } catch(err) {
     console.log('error :', err);
   }
