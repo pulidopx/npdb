@@ -69,7 +69,9 @@ const create = (db, data, schema, update) => {
                 merge = await unique(db, data, schema);
             }
              
-            let cdata = JSON.stringify(merge.data, null, 2);
+            const putData = sortData(merge.data);
+
+            let cdata = JSON.stringify(putData, null, 2);
         
             fs.writeFile(`${folderName}/${db}.json`, cdata, (err) => {
                 if (err) { reject(err); return;};
@@ -79,11 +81,10 @@ const create = (db, data, schema, update) => {
             reject(err);
         }
     });
-  };
+};
   
   const read = (db, criteria = null) => {
     return new Promise((resolve, reject) => {
-
         if (fs.existsSync(`${folderName}/${db}.json`)) {
             fs.readFile(`${folderName}/${db}.json`, 'utf8', (err, data) => {
                 if (err) { reject(err); return;};
@@ -166,7 +167,7 @@ const create = (db, data, schema, update) => {
                 }
             })
 
-            const fildt = JSON.stringify(arr);
+            const fildt = JSON.stringify(sortData(arr));
 
             fs.writeFile(`${folderName}/${db}.json`, fildt, (err) => {
                 if (err) reject(err);
@@ -196,7 +197,7 @@ const create = (db, data, schema, update) => {
             
             let filter = arr;
 
-            const fildt = JSON.stringify(filter);
+            const fildt = JSON.stringify(sortData(filter));
 
             fs.writeFile(`${folderName}/${db}.json`, fildt, (err) => {
                 if (err) reject(err);
@@ -220,8 +221,8 @@ const create = (db, data, schema, update) => {
 
             Object.keys(currentSchema).forEach((k) => {
                 if (currentSchema[k].require) {
-    
-                    if(!cdata[k]) {
+                    const finded = cdata[k] === 0 ? '0' : cdata[k]
+                    if(!finded) {
                         schemaValid = false;
                         error = { message: 'Document property, "' + k + '" - is required' }
                     }
@@ -255,11 +256,12 @@ const create = (db, data, schema, update) => {
                         const find = JSON.parse(data).find(dt => dt.id === up);
                         
                         Object.keys(updateData).forEach(k => {
-                            if (find[k]) {
+                            const property = find[k] === 0 ? '0' : find[k];
+
+                            if (property) {
                                 find[k] = updateData[k]
                             }
                         });
-
                         delete find.id;
                         delete find.created_date;
                         delete find.updated_date;
@@ -291,8 +293,10 @@ const create = (db, data, schema, update) => {
         const find = JSON.parse(data).find(dt => dt.id === up);
         if (find && updateData) {
             Object.keys(updateData).forEach(k => {
-
-                if (!find[k]) {
+                const property = find[k] === 0 ? '0' : find[k];
+                
+                if (!property) {
+                    // console.log('Property : ', typeof property)
                     error = true;
                     messageError = 'The current set property not exist in the file, try again with valid property data';
                 }
@@ -330,8 +334,10 @@ const create = (db, data, schema, update) => {
                     
                         multiCheck(ids, putData, data, schema, db)
                         .then(data => {
-                            let setdata = JSON.stringify(data.concat(removeData), null, 2);
-            
+                            const putData = sortData(data.concat(removeData));
+
+                            let setdata = JSON.stringify(putData, null, 2);
+                            
                             fs.writeFile(`${folderName}/${db}.json`, setdata, (err) => {
                                 if (err) { reject(err); return;};
                                 resolve(setdata)
@@ -348,6 +354,10 @@ const create = (db, data, schema, update) => {
 
         
     });
+  }
+
+  const sortData = (data = []) => {
+    return data.sort((a, b) => new Date(b.created_date) - new Date(a.created_date));
   }
 
   module.exports = (schema, path = 'C:/npdb') => {
