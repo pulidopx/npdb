@@ -212,6 +212,11 @@ const create = (db, data, schema, update) => {
     return new Promise((resolve, reject) => {
         const removing = remove;
         const created = create;
+
+        delete cdata.id;
+        delete cdata.created_date;
+        delete cdata.updated_date;
+
         fs.readFile(`${folderName}/${db}.json`, async (err, data) => {
             if (err) { reject(err); return;};
 
@@ -239,6 +244,7 @@ const create = (db, data, schema, update) => {
 
                 resolve(info);
             } else {
+                console.log('Error : --->', error);
                 reject(find ? error : 'The document property no exist');
             }
         });
