@@ -56,6 +56,7 @@ const unique = (db, cdata, schema, update) => {
 const create = (db, data, schema, update) => {
     return new Promise( async (resolve, reject) => {
         try {
+            
             let merge = {};
   
             if (!fs.existsSync(folderName)){
@@ -73,10 +74,12 @@ const create = (db, data, schema, update) => {
 
             let cdata = JSON.stringify(putData, null, 2);
         
-            fs.writeFile(`${folderName}/${db}.json`, cdata, (err) => {
-                if (err) { reject(err); return;};
-                resolve(merge.info)
-            });
+            waiting_process(() => {
+                fs.writeFile(`${folderName}/${db}.json`, cdata, (err) => {
+                    if (err) { reject(err); return;};
+                    resolve(merge.info)
+                });
+            }, 1000)
         } catch(err) {
             reject(err);
         }
@@ -85,48 +88,50 @@ const create = (db, data, schema, update) => {
   
   const read = (db, criteria = null) => {
     return new Promise((resolve, reject) => {
-        if (fs.existsSync(`${folderName}/${db}.json`)) {
-            fs.readFile(`${folderName}/${db}.json`, 'utf8', (err, data) => {
-                if (err) { reject(err); return;};
-            
-                if (data !== 'undefined') {
-
-                    if (criteria) {
-                        const document = JSON.parse(data);
-
-                        const range = [];
-
-                        for (let index = criteria.range.min; index < criteria.range.max + 1; index++) {
-                            range.push(index);                            
-                        }
-                        
-                        //console.log('range :', range);
-                        const where = (i) => {
-                            let isValid = false;
-                            const rang = range.find(r => r === i);
-                            
-                            if (rang || rang === 0) {
-                                isValid = true;
+        waiting_process(() => {
+            if (fs.existsSync(`${folderName}/${db}.json`)) {
+                fs.readFile(`${folderName}/${db}.json`, 'utf8', (err, data) => {
+                    if (err) { reject(err); return;};
+                
+                    if (data !== 'undefined') {
+    
+                        if (criteria) {
+                            const document = JSON.parse(data);
+    
+                            const range = [];
+    
+                            for (let index = criteria.range.min; index < criteria.range.max + 1; index++) {
+                                range.push(index);                            
                             }
-                            return isValid;
+                            
+                            //console.log('range :', range);
+                            const where = (i) => {
+                                let isValid = false;
+                                const rang = range.find(r => r === i);
+                                
+                                if (rang || rang === 0) {
+                                    isValid = true;
+                                }
+                                return isValid;
+                            }
+    
+                            const res = {
+                                rows: document.filter((dt, i) => where(i)),
+                                count: document.filter((dt, i) => where(i)).length 
+                            }
+                                            
+                            resolve(res);
+                        } else {
+                            resolve(data ? JSON.parse(data) : []);
                         }
-
-                        const res = {
-                            rows: document.filter((dt, i) => where(i)),
-                            count: document.filter((dt, i) => where(i)).length 
-                        }
-                                        
-                        resolve(res);
                     } else {
-                        resolve(data ? JSON.parse(data) : []);
+                        resolve([])
                     }
-                } else {
-                    resolve([])
-                }
-            });
-        } else {
-            resolve([])
-        }
+                });
+            } else {
+                resolve([])
+            }
+        }, 1000)
     })
   }
 
@@ -217,36 +222,37 @@ const create = (db, data, schema, update) => {
         delete cdata.created_date;
         delete cdata.updated_date;
 
-        fs.readFile(`${folderName}/${db}.json`, async (err, data) => {
-            if (err) { reject(err); return;};
-
-            let schemaValid = true;
-            let error = '';
-            const currentSchema = schema.find(sc => sc[db]);
-
-            Object.keys(currentSchema).forEach((k) => {
-                if (currentSchema[k].require) {
-                    const finded = cdata[k] === 0 ? '0' : cdata[k]
-                    if(!finded) {
-                        schemaValid = false;
-                        error = { message: 'Document property, "' + k + '" - is required' }
+        waiting_process(() => {
+            fs.readFile(`${folderName}/${db}.json`, async (err, data) => {
+                if (err) { reject(err); return;};
+    
+                let schemaValid = true;
+                let error = '';
+                const currentSchema = schema.find(sc => sc[db]);
+    
+                Object.keys(currentSchema).forEach((k) => {
+                    if (currentSchema[k].require) {
+                        const finded = cdata[k] === 0 ? '0' : cdata[k]
+                        if(!finded) {
+                            schemaValid = false;
+                            error = { message: 'Document property, "' + k + '" - is required' }
+                        }
                     }
+                });
+        
+                const find = JSON.parse(data).find(dt => dt.id === id);
+                let info = {};
+    
+                if (find && schemaValid) {
+                    await removing(db, id);
+                    // console.log('rem :', rem);
+                    info = await created(db, cdata, schema, id);
+    
+                    resolve(info);
+                } else {
+                    reject(find ? error : 'The document property no exist');
                 }
             });
-    
-            const find = JSON.parse(data).find(dt => dt.id === id);
-            let info = {};
-
-            if (find && schemaValid) {
-                await removing(db, id);
-                // console.log('rem :', rem);
-                info = await created(db, cdata, schema, id);
-
-                resolve(info);
-            } else {
-                console.log('Error : --->', error);
-                reject(find ? error : 'The document property no exist');
-            }
         });
     })
   }
@@ -326,44 +332,49 @@ const create = (db, data, schema, update) => {
         const removing = removePerOne;
         const putData = cdata;
         
-
-        fs.readFile(`${folderName}/${db}.json`, 'utf8', async (err, data) => {
-            if (err) { reject(err); return;};
-
-            try {
-                const check = checkDocumentProperties(ids, putData, data);
-
-                if (check.error) {
-                    reject(check.messageError);
-                } else {
-                    removing(db, ids).then((removeData) => {
-                    
-                        multiCheck(ids, putData, data, schema, db)
-                        .then(data => {
-                            const putData = sortData(data.concat(removeData));
-
-                            let setdata = JSON.stringify(putData, null, 2);
-                            
-                            fs.writeFile(`${folderName}/${db}.json`, setdata, (err) => {
-                                if (err) { reject(err); return;};
-                                resolve(setdata)
-                            });
-                        })
-                        .catch(err => { console.log('error: ', err); reject(err) });
-                    }).catch(err => { console.log('error: ', err); reject(err) });   
+        waiting_process(() => {
+            fs.readFile(`${folderName}/${db}.json`, 'utf8', async (err, data) => {
+                if (err) { reject(err); return;};
+    
+                try {
+                    const check = checkDocumentProperties(ids, putData, data);
+    
+                    if (check.error) {
+                        reject(check.messageError);
+                    } else {
+                        removing(db, ids).then((removeData) => {
+                        
+                            multiCheck(ids, putData, data, schema, db)
+                            .then(data => {
+                                const putData = sortData(data.concat(removeData));
+    
+                                let setdata = JSON.stringify(putData, null, 2);
+                                
+                                fs.writeFile(`${folderName}/${db}.json`, setdata, (err) => {
+                                    if (err) { reject(err); return;};
+                                    resolve(setdata)
+                                });
+                            })
+                            .catch(err => { console.log('error: ', err); reject(err) });
+                        }).catch(err => { console.log('error: ', err); reject(err) });   
+                    }
+                } catch (err) {
+                    console.log('error:', err);
+                    reject(err);
                 }
-            } catch (err) {
-                console.log('error:', err);
-                reject(err);
-            }
+            });    
         });
-
-        
     });
   }
 
   const sortData = (data = []) => {
     return data.sort((a, b) => new Date(b.created_date) - new Date(a.created_date));
+  }
+
+  const waiting_process = (method, wait = 2000) => {
+    const process = {}; 
+    process.wait = setTimeout(method, wait);
+    process.wait = null;
   }
 
   module.exports = (schema, path = 'C:/npdb') => {
