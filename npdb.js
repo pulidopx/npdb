@@ -4,8 +4,12 @@ let folderName = '';
 
 const unique = (db, cdata, schema, update) => {
     return new Promise(async(resolve, reject) => {
-        const data = await read(db) || [];
+        let data = await read(db) || [];
 
+        if (update) {
+            data = data.filter(dt => dt.id !== update);
+        }
+        
         const currentSchema = schema.find(sc => sc[db]);
         
         Object.keys(currentSchema).forEach((k) => {
@@ -79,7 +83,7 @@ const create = (db, data, schema, update) => {
                     if (err) { reject(err); return;};
                     resolve(merge.info)
                 });
-            }, 1000)
+            }, 500)
         } catch(err) {
             reject(err);
         }
@@ -131,7 +135,7 @@ const create = (db, data, schema, update) => {
             } else {
                 resolve([])
             }
-        }, 1000)
+        }, 300)
     })
   }
 
@@ -202,20 +206,13 @@ const create = (db, data, schema, update) => {
             
             let filter = arr;
 
-            const fildt = JSON.stringify(sortData(filter));
-
-            fs.writeFile(`${folderName}/${db}.json`, fildt, (err) => {
-                if (err) reject(err);
-                console.log('Data written to file');
-                resolve(filter)
-            });    
+            resolve(filter);
         });
     })   
   }
 
   const update = (db, id, cdata, schema) => {
     return new Promise((resolve, reject) => {
-        const removing = remove;
         const created = create;
 
         delete cdata.id;
@@ -244,8 +241,6 @@ const create = (db, data, schema, update) => {
                 let info = {};
     
                 if (find && schemaValid) {
-                    await removing(db, id);
-                    // console.log('rem :', rem);
                     info = await created(db, cdata, schema, id);
     
                     resolve(info);
@@ -308,7 +303,6 @@ const create = (db, data, schema, update) => {
                 const property = find[k] === 0 ? '0' : find[k];
                 
                 if (!property) {
-                    // console.log('Property : ', typeof property)
                     error = true;
                     messageError = 'The current set property not exist in the file, try again with valid property data';
                 }
@@ -343,11 +337,9 @@ const create = (db, data, schema, update) => {
                         reject(check.messageError);
                     } else {
                         removing(db, ids).then((removeData) => {
-                        
                             multiCheck(ids, putData, data, schema, db)
                             .then(data => {
                                 const putData = sortData(data.concat(removeData));
-    
                                 let setdata = JSON.stringify(putData, null, 2);
                                 
                                 fs.writeFile(`${folderName}/${db}.json`, setdata, (err) => {
