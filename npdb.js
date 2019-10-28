@@ -1,21 +1,28 @@
 'use strict';
 const fs = require('fs');
 let folderName = '';
+let bcrypt = require('bcrypt');
 
 const unique = (db, cdata, schema, update) => {
     return new Promise(async(resolve, reject) => {
         let data = await read(db) || [];
-
+        let isPassword = false;
+        let namePasswordProp = '';
         if (update) {
             data = data.filter(dt => dt.id !== update);
         }
-        
+
         const currentSchema = schema.find(sc => sc[db]);
-        
+
         Object.keys(currentSchema).forEach((k) => {
+            isPassword = currentSchema[k].password;
+            namePasswordProp = isPassword ? k : '';
+
             if (currentSchema[k].require) {
 
-                if(!cdata[k]) {
+                const findedBool = typeof cdata[k] === 'boolean'; // Boolean(String(cdata[k]));
+                const finded = cdata[k] === 0 ? '0' : ( findedBool || cdata[k] );
+                if(!finded) {
                     const err = { message: 'Document property, "' + k + '" - is required' }
                     reject(err);
                     throw err;
@@ -27,7 +34,7 @@ const unique = (db, cdata, schema, update) => {
             Object.keys(currentSchema).forEach((key) => {
                 if (currentSchema[key].unique) {
                     const exist = data.find(dt => dt[key] === cdata[key]);
-                    
+
                     if (exist) {
                         const err = { message: 'Document repeat not allow : unique - ' + key}
                         reject(err);
@@ -44,9 +51,14 @@ const unique = (db, cdata, schema, update) => {
                 }
             });
         }
-    
+
         const id = Math.random().toString(36).slice(-9) + '-' + Math.random().toString(36).slice(-9);
-        
+
+
+        if (isPassword) {
+            cdata[namePasswordProp] = bcrypt.hashSync(cdata[namePasswordProp], 10);
+        }
+
         const output = Object.assign(cdata, {
             id: update || id,
             created_date: new Date().getTime(),
@@ -60,24 +72,24 @@ const unique = (db, cdata, schema, update) => {
 const create = (db, data, schema, update) => {
     return new Promise( async (resolve, reject) => {
         try {
-            
+
             let merge = {};
-  
+
             if (!fs.existsSync(folderName)){
-              
+
               fs.mkdirSync(folderName);
             }
-            
+
             if (update) {
                 merge = await unique(db, data, schema, update);
             } else {
                 merge = await unique(db, data, schema);
             }
-             
+
             const putData = sortData(merge.data);
 
             let cdata = JSON.stringify(putData, null, 2);
-        
+
             waiting_process(() => {
                 fs.writeFile(`${folderName}/${db}.json`, cdata, (err) => {
                     if (err) { reject(err); return;};
@@ -89,41 +101,41 @@ const create = (db, data, schema, update) => {
         }
     });
 };
-  
+
   const read = (db, criteria = null) => {
     return new Promise((resolve, reject) => {
         waiting_process(() => {
             if (fs.existsSync(`${folderName}/${db}.json`)) {
                 fs.readFile(`${folderName}/${db}.json`, 'utf8', (err, data) => {
                     if (err) { reject(err); return;};
-                
+
                     if (data !== 'undefined') {
-    
+
                         if (criteria) {
                             const document = JSON.parse(data);
-    
+
                             const range = [];
-    
+
                             for (let index = criteria.range.min; index < criteria.range.max + 1; index++) {
-                                range.push(index);                            
+                                range.push(index);
                             }
-                            
+
                             //console.log('range :', range);
                             const where = (i) => {
                                 let isValid = false;
                                 const rang = range.find(r => r === i);
-                                
+
                                 if (rang || rang === 0) {
                                     isValid = true;
                                 }
                                 return isValid;
                             }
-    
+
                             const res = {
                                 rows: document.filter((dt, i) => where(i)),
-                                count: document.filter((dt, i) => where(i)).length 
+                                count: document.filter((dt, i) => where(i)).length
                             }
-                                            
+
                             resolve(res);
                         } else {
                             resolve(data ? JSON.parse(data) : []);
@@ -153,7 +165,7 @@ const create = (db, data, schema, update) => {
             });
 
             return isValid;
-        }    
+        }
 
         fs.readFile(`${folderName}/${db}.json`, (err, data) => {
             if (err) { reject(err); return;};
@@ -184,7 +196,7 @@ const create = (db, data, schema, update) => {
             });
 
             resolve('The object is success remove');
-            
+
         });
     })
   }
@@ -203,12 +215,12 @@ const create = (db, data, schema, update) => {
                 }
             });
 
-            
+
             let filter = arr;
 
             resolve(filter);
         });
-    })   
+    })
   }
 
   const update = (db, id, cdata, schema) => {
@@ -222,28 +234,34 @@ const create = (db, data, schema, update) => {
         waiting_process(() => {
             fs.readFile(`${folderName}/${db}.json`, async (err, data) => {
                 if (err) { reject(err); return;};
-    
+
                 let schemaValid = true;
                 let error = '';
                 const currentSchema = schema.find(sc => sc[db]);
-    
+
                 Object.keys(currentSchema).forEach((k) => {
                     if (currentSchema[k].require) {
-                        const finded = cdata[k] === 0 ? '0' : cdata[k]
+                        const findedBool = typeof cdata[k] === 'boolean'; // Boolean(String(cdata[k]));
+                        const finded = cdata[k] === 0 ? '0' : ( findedBool || cdata[k] );
+                        console.log('finded : ' + k, finded);
                         if(!finded) {
                             schemaValid = false;
                             error = { message: 'Document property, "' + k + '" - is required' }
                         }
                     }
                 });
-        
+
                 const find = JSON.parse(data).find(dt => dt.id === id);
                 let info = {};
-    
+
                 if (find && schemaValid) {
+                  try {
                     info = await created(db, cdata, schema, id);
-    
                     resolve(info);
+                  } catch (err) {
+                    console.log('err :', err);
+                    reject(err);
+                  }
                 } else {
                     reject(find ? error : 'The document property no exist');
                 }
@@ -261,7 +279,7 @@ const create = (db, data, schema, update) => {
                 if (updateData) {
                     try {
                         const find = JSON.parse(data).find(dt => dt.id === up);
-                        
+
                         Object.keys(updateData).forEach(k => {
                             const property = find[k] === 0 ? '0' : find[k];
 
@@ -285,9 +303,9 @@ const create = (db, data, schema, update) => {
                         console.log('error: ', err);
                         reject(err.message);
                     }
-                }  
-        });   
-    
+                }
+        });
+
       })
   }
 
@@ -301,7 +319,7 @@ const create = (db, data, schema, update) => {
         if (find && updateData) {
             Object.keys(updateData).forEach(k => {
                 const property = find[k] === 0 ? '0' : find[k];
-                
+
                 if (!property) {
                     error = true;
                     messageError = 'The current set property not exist in the file, try again with valid property data';
@@ -322,17 +340,17 @@ const create = (db, data, schema, update) => {
 
   const multiUpdate = (db, ids, cdata, schema) => {
     return new Promise((resolve, reject) => {
-        
+
         const removing = removePerOne;
         const putData = cdata;
-        
+
         waiting_process(() => {
             fs.readFile(`${folderName}/${db}.json`, 'utf8', async (err, data) => {
                 if (err) { reject(err); return;};
-    
+
                 try {
                     const check = checkDocumentProperties(ids, putData, data);
-    
+
                     if (check.error) {
                         reject(check.messageError);
                     } else {
@@ -341,22 +359,58 @@ const create = (db, data, schema, update) => {
                             .then(data => {
                                 const putData = sortData(data.concat(removeData));
                                 let setdata = JSON.stringify(putData, null, 2);
-                                
+
                                 fs.writeFile(`${folderName}/${db}.json`, setdata, (err) => {
                                     if (err) { reject(err); return;};
                                     resolve(setdata)
                                 });
                             })
                             .catch(err => { console.log('error: ', err); reject(err) });
-                        }).catch(err => { console.log('error: ', err); reject(err) });   
+                        }).catch(err => { console.log('error: ', err); reject(err) });
                     }
                 } catch (err) {
                     console.log('error:', err);
                     reject(err);
                 }
-            });    
+            });
         });
     });
+  }
+
+  const comparePassword = (db, schema, id, password) => {
+    return new Promise((resolve, reject) => {
+
+        fs.readFile(`${folderName}/${db}.json`, 'utf8', async (err, data) => {
+            if (err) { reject(err); return;};
+
+            let nameProperty = '';
+            const currentSchema = schema.find(sc => sc[db]);
+            const arr = JSON.parse(data).filter(dt => dt.id === id)[0];
+
+            Object.keys(currentSchema).forEach(k => {
+               if (currentSchema[k].password) {
+                   nameProperty = k;
+               }
+            });
+
+            if (arr) {
+                const entryPassword = bcrypt.hashSync(password, 10);
+                const result = bcrypt.compare(entryPassword, arr[nameProperty]);
+
+                if (result) {
+                    resolve({
+                        valid: true,
+                        message: 'contraseña correcta'
+                    });
+                } else {
+                    reject('contraseña no coincide');
+                }
+                
+            } else {
+                reject('error inesperado')
+            }
+        });
+    })
   }
 
   const sortData = (data = []) => {
@@ -364,7 +418,7 @@ const create = (db, data, schema, update) => {
   }
 
   const waiting_process = (method, wait = 2000) => {
-    const process = {}; 
+    const process = {};
     process.wait = setTimeout(method, wait);
     process.wait = null;
   }
@@ -380,5 +434,6 @@ const create = (db, data, schema, update) => {
         // -----
         find,
         multiUpdate: (db, ids, data) => multiUpdate(db, ids, data, schema),
+        comparePassword: (db, id, password) => comparePassword(db, schema, id, password)
     }
   };
