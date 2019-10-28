@@ -6,8 +6,8 @@ let bcrypt = require('bcrypt');
 const unique = (db, cdata, schema, update) => {
     return new Promise(async(resolve, reject) => {
         let data = await read(db) || [];
-        let isPassword = false;
-        let namePasswordProp = '';
+        // let isPassword = false;
+        // let namePasswordProp = '';
         if (update) {
             data = data.filter(dt => dt.id !== update);
         }
@@ -15,8 +15,8 @@ const unique = (db, cdata, schema, update) => {
         const currentSchema = schema.find(sc => sc[db]);
 
         Object.keys(currentSchema).forEach((k) => {
-            isPassword = currentSchema[k].password;
-            namePasswordProp = isPassword ? k : '';
+/*             isPassword = currentSchema[k].password;
+            namePasswordProp = isPassword ? k : ''; */
 
             if (currentSchema[k].require) {
 
@@ -55,9 +55,9 @@ const unique = (db, cdata, schema, update) => {
         const id = Math.random().toString(36).slice(-9) + '-' + Math.random().toString(36).slice(-9);
 
 
-        if (isPassword) {
+/*         if (isPassword) {
             cdata[namePasswordProp] = bcrypt.hashSync(cdata[namePasswordProp], 10);
-        }
+        } */
 
         const output = Object.assign(cdata, {
             id: update || id,
@@ -377,7 +377,7 @@ const create = (db, data, schema, update) => {
     });
   }
 
-  const comparePassword = (db, schema, id, password) => {
+/*   const comparePassword = (db, schema, id, password) => {
     return new Promise((resolve, reject) => {
 
         fs.readFile(`${folderName}/${db}.json`, 'utf8', async (err, data) => {
@@ -412,7 +412,7 @@ const create = (db, data, schema, update) => {
         });
     })
   }
-
+ */
   const sortData = (data = []) => {
     return data.sort((a, b) => new Date(b.created_date) - new Date(a.created_date));
   }
@@ -434,6 +434,6 @@ const create = (db, data, schema, update) => {
         // -----
         find,
         multiUpdate: (db, ids, data) => multiUpdate(db, ids, data, schema),
-        comparePassword: (db, id, password) => comparePassword(db, schema, id, password)
+        // comparePassword: (db, id, password) => comparePassword(db, schema, id, password)
     }
   };
