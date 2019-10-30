@@ -3,9 +3,9 @@ const fs = require('fs');
 let folderName = '';
 let bcrypt = require('bcrypt');
 
-const unique = (db, cdata, schema, update) => {
+const unique = (db, cdata, schema, update, folder) => {
     return new Promise(async(resolve, reject) => {
-        let data = await read(db) || [];
+        let data = await read(db, null, folder) || [];
         let isPassword = false;
         let namePasswordProp = '';
         if (update) {
@@ -69,7 +69,7 @@ const unique = (db, cdata, schema, update) => {
     });
 }
 
-const create = (db, data, schema, update) => {
+const create = (db, data, schema, update, folder = null) => {
     return new Promise( async (resolve, reject) => {
         try {
 
@@ -81,20 +81,40 @@ const create = (db, data, schema, update) => {
             }
 
             if (update) {
-                merge = await unique(db, data, schema, update);
+                merge = await unique(db, data, schema, update, folder);
             } else {
-                merge = await unique(db, data, schema);
+                merge = await unique(db, data, schema, null, folder);
             }
 
             const putData = sortData(merge.data);
 
             let cdata = JSON.stringify(putData, null, 2);
 
-            waiting_process(() => {
-                fs.writeFile(`${folderName}/${db}.json`, cdata, (err) => {
-                    if (err) { reject(err); return;};
-                    resolve(merge.info)
-                });
+            waiting_process(async () => {
+                let pathing = '';
+                if (folder && folder.split('-')[1]) {
+                    pathing = folder ? `${folderName}/${db}/${folder.split('-')[0]}/${folder.split('-')[1]}.json` : `${folderName}/${db}.json`;
+                } else {
+                    pathing = folder ? `${folderName}/${db}/${folder}.json` : `${folderName}/${db}.json`;
+                }
+
+
+                if(!fs.existsSync(pathing)) {
+                    const fd = folder ? `${folderName}/${db}/${folder.split('-')[0] || folder}` : `${folderName}/`;
+                    fs.promises.mkdir(fd, { recursive: true }).then(() => {
+                        fs.writeFile(pathing, cdata, (err) => {
+                            if (err) {reject(err); return;};
+                            resolve(merge.info)
+                        });
+                    })
+                    .catch((err) => reject(err));
+                   
+                } else {
+                    fs.writeFile(pathing, cdata, (err) => {
+                        if (err) {reject(err); return;};
+                        resolve(merge.info)
+                    });
+                }
             }, 500)
         } catch(err) {
             reject(err);
@@ -102,11 +122,19 @@ const create = (db, data, schema, update) => {
     });
 };
 
-  const read = (db, criteria = null) => {
+  const read = (db, criteria = null, folder = null) => {
     return new Promise((resolve, reject) => {
         waiting_process(() => {
-            if (fs.existsSync(`${folderName}/${db}.json`)) {
-                fs.readFile(`${folderName}/${db}.json`, 'utf8', (err, data) => {
+
+            let pathing = '';
+            if (folder && folder.split('-')[1]) {
+                pathing = folder ? `${folderName}/${db}/${folder.split('-')[0]}/${folder.split('-')[1]}.json` : `${folderName}/${db}.json`;
+            } else {
+                pathing = folder ? `${folderName}/${db}/${folder}.json` : `${folderName}/${db}.json`;
+            }
+
+            if (fs.existsSync(pathing)) {
+                fs.readFile(pathing, 'utf8', (err, data) => {
                     if (err) { reject(err); return;};
 
                     if (data !== 'undefined') {
@@ -151,7 +179,7 @@ const create = (db, data, schema, update) => {
     })
   }
 
-  const find = (db, criteria, projection = null) => {
+  const find = (db, criteria, folder = null) => {
     return new Promise((resolve, reject) => {
 
         const where = (data, criteria) => {
@@ -167,7 +195,14 @@ const create = (db, data, schema, update) => {
             return isValid;
         }
 
-        fs.readFile(`${folderName}/${db}.json`, (err, data) => {
+        let pathing = '';
+        if (folder && folder.split('-')[1]) {
+            pathing = folder ? `${folderName}/${db}/${folder.split('-')[0]}/${folder.split('-')[1]}.json` : `${folderName}/${db}.json`;
+        } else {
+            pathing = folder ? `${folderName}/${db}/${folder}.json` : `${folderName}/${db}.json`;
+        }
+
+        fs.readFile(pathing, (err, data) => {
             if (err) { reject(err); return;};
             const filter = JSON.parse(data).filter(dt => where(dt, criteria));
             resolve(filter);
@@ -175,9 +210,16 @@ const create = (db, data, schema, update) => {
     })
   }
 
-  const remove = (db, id) => {
+  const remove = (db, id, folder = null) => {
     return new Promise((resolve, reject) => {
-        fs.readFile(`${folderName}/${db}.json`, 'utf8', async (err, data) => {
+        let pathing = '';
+        if (folder && folder.split('-')[1]) {
+            pathing = folder ? `${folderName}/${db}/${folder.split('-')[0]}/${folder.split('-')[1]}.json` : `${folderName}/${db}.json`;
+        } else {
+            pathing = folder ? `${folderName}/${db}/${folder}.json` : `${folderName}/${db}.json`;
+        }
+
+        fs.readFile(pathing, 'utf8', async (err, data) => {
             if (err) { reject(err); return;};
             const arr = [];
             let filter = JSON.parse(data);
@@ -190,7 +232,7 @@ const create = (db, data, schema, update) => {
 
             const fildt = JSON.stringify(sortData(arr));
 
-            fs.writeFile(`${folderName}/${db}.json`, fildt, (err) => {
+            fs.writeFile(pathing, fildt, (err) => {
                 if (err) reject(err);
                 console.log('Data written to file');
             });
@@ -223,7 +265,7 @@ const create = (db, data, schema, update) => {
     })
   }
 
-  const update = (db, id, cdata, schema) => {
+  const update = (db, id, cdata, schema, folder = null) => {
     return new Promise((resolve, reject) => {
         const created = create;
 
@@ -232,7 +274,14 @@ const create = (db, data, schema, update) => {
         delete cdata.updated_date;
 
         waiting_process(() => {
-            fs.readFile(`${folderName}/${db}.json`, async (err, data) => {
+            let pathing = '';
+            if (folder && folder.split('-')[1]) {
+                pathing = folder ? `${folderName}/${db}/${folder.split('-')[0]}/${folder.split('-')[1]}.json` : `${folderName}/${db}.json`;
+            } else {
+                pathing = folder ? `${folderName}/${db}/${folder}.json` : `${folderName}/${db}.json`;
+            }
+
+            fs.readFile(pathing, async (err, data) => {
                 if (err) { reject(err); return;};
 
                 let schemaValid = true;
@@ -243,7 +292,6 @@ const create = (db, data, schema, update) => {
                     if (currentSchema[k].require) {
                         const findedBool = typeof cdata[k] === 'boolean'; // Boolean(String(cdata[k]));
                         const finded = cdata[k] === 0 ? '0' : ( findedBool || cdata[k] );
-                        console.log('finded : ' + k, finded);
                         if(!finded) {
                             schemaValid = false;
                             error = { message: 'Document property, "' + k + '" - is required' }
@@ -256,10 +304,9 @@ const create = (db, data, schema, update) => {
 
                 if (find && schemaValid) {
                   try {
-                    info = await created(db, cdata, schema, id);
+                    info = await created(db, cdata, schema, id, folder);
                     resolve(info);
                   } catch (err) {
-                    console.log('err :', err);
                     reject(err);
                   }
                 } else {
@@ -369,7 +416,6 @@ const create = (db, data, schema, update) => {
                         }).catch(err => { console.log('error: ', err); reject(err) });
                     }
                 } catch (err) {
-                    console.log('error:', err);
                     reject(err);
                 }
             });
@@ -427,9 +473,9 @@ const create = (db, data, schema, update) => {
     folderName = path;
 
     return {
-        create: (db, data) => create(db, data, schema),
+        create: (db, data, folder) => create(db, data, schema, null, folder),
         read,
-        update: (db, id, data) => update(db, id, data, schema),
+        update: (db, id, data, folder) => update(db, id, data, schema, folder),
         delete: remove,
         // -----
         find,
