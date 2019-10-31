@@ -3,12 +3,12 @@ const fs = require('fs');
 let folderName = '';
 let bcrypt = require('bcrypt');
 
-const unique = (db, cdata, schema, update, folder) => {
+const unique = (db, cdata, schema, update, folder, date, multiple, iterator) => {
     return new Promise(async(resolve, reject) => {
         let data = await read(db, null, folder) || [];
         let isPassword = false;
         let namePasswordProp = '';
-        if (update) {
+        if (update && !multiple) {
             data = data.filter(dt => dt.id !== update);
         }
 
@@ -58,10 +58,10 @@ const unique = (db, cdata, schema, update, folder) => {
         if (isPassword) {
             cdata[namePasswordProp] = bcrypt.hashSync(cdata[namePasswordProp], 10);
         }
-
+        console.log('date =============> :', date, iterator);
         const output = Object.assign(cdata, {
             id: update || id,
-            created_date: new Date().getTime(),
+            created_date: update ? date : new Date().getTime(),
             updated_date: update ? new Date().getTime() : null,
         });
         data.push(output)
@@ -69,7 +69,72 @@ const unique = (db, cdata, schema, update, folder) => {
     });
 }
 
-const create = (db, data, schema, update, folder = null) => {
+
+const uniqueFunction = (db, cdata, schema, update, folder, date, multiple, cb) => {
+    read(db, null, folder)
+        .then((data) => {
+            
+            let isPassword = false;
+            let err = null;
+            let namePasswordProp = '';
+            if (update && !multiple) {
+                data = data.filter(dt => dt.id !== update);
+            }
+
+            const currentSchema = schema.find(sc => sc[db]);
+
+            Object.keys(currentSchema).forEach((k) => {
+                isPassword = currentSchema[k].password;
+                namePasswordProp = isPassword ? k : '';
+
+                if (currentSchema[k].require) {
+
+                    const findedBool = typeof cdata[k] === 'boolean'; // Boolean(String(cdata[k]));
+                    const finded = cdata[k] === 0 ? '0' : ( findedBool || cdata[k] );
+                    if(!finded) {
+                        err = { message: 'Document property, "' + k + '" - is required', error: true }
+                    }
+                }
+            });
+
+            if (currentSchema) {
+                Object.keys(currentSchema).forEach((key) => {
+                    if (currentSchema[key].unique) {
+                        const exist = data.find(dt => dt[key] === cdata[key]);
+
+                        if (exist) {
+                            err = { message: 'Document repeat not allow : unique - ' + key, error: true }
+
+                        }
+                    }
+                })
+
+                Object.keys(cdata).forEach(cd => {
+                    if (currentSchema[cd].type !== typeof cdata[cd]) {
+                        err = { message: 'Document type property is not valid "' + cd +'" - need ' + currentSchema[cd].type + ' type', error: true }
+                        
+                    }
+                });
+            }
+
+            const id = Math.random().toString(36).slice(-9) + '-' + Math.random().toString(36).slice(-9);
+
+
+            if (isPassword) {
+                cdata[namePasswordProp] = bcrypt.hashSync(cdata[namePasswordProp], 10);
+            }
+
+            const output = Object.assign(cdata, {
+                id: update || id,
+                created_date: update ? date : new Date().getTime(),
+                updated_date: update ? new Date().getTime() : null,
+            });
+            data.push(output)
+            cb(err || { data, info: output });
+        })
+}
+
+const create = (db, data, schema, update, folder = null, date) => {
     return new Promise( async (resolve, reject) => {
         try {
 
@@ -81,7 +146,7 @@ const create = (db, data, schema, update, folder = null) => {
             }
 
             if (update) {
-                merge = await unique(db, data, schema, update, folder);
+                merge = await unique(db, data, schema, update, folder, date);
             } else {
                 merge = await unique(db, data, schema, null, folder);
             }
@@ -257,7 +322,7 @@ const create = (db, data, schema, update, folder = null) => {
                 }
             });
 
-
+            console.log('REMOVE PER ONE ________| :', arr);
             let filter = arr;
 
             resolve(filter);
@@ -268,7 +333,6 @@ const create = (db, data, schema, update, folder = null) => {
   const update = (db, id, cdata, schema, folder = null) => {
     return new Promise((resolve, reject) => {
         const created = create;
-
         delete cdata.id;
         delete cdata.created_date;
         delete cdata.updated_date;
@@ -300,11 +364,12 @@ const create = (db, data, schema, update, folder = null) => {
                 });
 
                 const find = JSON.parse(data).find(dt => dt.id === id);
+
                 let info = {};
 
                 if (find && schemaValid) {
                   try {
-                    info = await created(db, cdata, schema, id, folder);
+                    info = await created(db, cdata, schema, id, folder, find.created_date);
                     resolve(info);
                   } catch (err) {
                     reject(err);
@@ -322,6 +387,7 @@ const create = (db, data, schema, update, folder = null) => {
         const arrayInfo = [];
 
         ids.forEach(async (up, i) => {
+            
             const updateData = putData.find(pd => pd.id === up);
                 if (updateData) {
                     try {
@@ -334,24 +400,27 @@ const create = (db, data, schema, update, folder = null) => {
                                 find[k] = updateData[k]
                             }
                         });
+                        const date = find.created_date;
                         delete find.id;
                         delete find.created_date;
                         delete find.updated_date;
-
-                        unique(db, find, schema, up)
-                            .then(uniq => {
-                                arrayInfo.push(uniq.info);
-                                if ((ids.length - 1) === i) {
-                                    resolve(arrayInfo);
-                                }
+                        console.log('multidate :', date, find, ids.length, i, ids);
+                        if (ids.length) {
+                            uniqueFunction(db, find, schema, up, null, date, true, (uniq) => {
+                                if (uniq.error) throw uniq.message;
+                                console.log('uniq :', uniq);
+                                arrayInfo.push(uniq.data);
                             })
-                            .catch(err => { console.log('err: ', err); });
+                        }
                     } catch(err) {
                         console.log('error: ', err);
                         reject(err.message);
                     }
                 }
         });
+
+        console.log('arrayInfoarrayInfo :', arrayInfo);
+        resolve(arrayInfo);
 
       })
   }
@@ -404,8 +473,9 @@ const create = (db, data, schema, update, folder = null) => {
                         removing(db, ids).then((removeData) => {
                             multiCheck(ids, putData, data, schema, db)
                             .then(data => {
-                                const putData = sortData(data.concat(removeData));
-                                let setdata = JSON.stringify(putData, null, 2);
+                                const body = sortData(data.concat(removeData));
+                                console.log('object :', data, removeData);
+                                let setdata = JSON.stringify(body);
 
                                 fs.writeFile(`${folderName}/${db}.json`, setdata, (err) => {
                                     if (err) { reject(err); return;};
@@ -463,6 +533,20 @@ const create = (db, data, schema, update, folder = null) => {
     return data.sort((a, b) => new Date(b.created_date) - new Date(a.created_date));
   }
 
+  const readFolder = (db, folder) => {
+    return new Promise((resolve, reject) => {
+        const fd = folder ? `${folderName}/${db}/${folder}` : `${folderName}/${db}`;
+        console.log('fd :', fd);
+        fs.readdir(fd, (err, files) => {
+            if (err) {
+                reject(err);
+            } else {
+                resolve(files)  
+            }      
+        });
+    });
+  }
+
   const waiting_process = (method, wait = 2000) => {
     const process = {};
     process.wait = setTimeout(method, wait);
@@ -480,6 +564,7 @@ const create = (db, data, schema, update, folder = null) => {
         // -----
         find,
         multiUpdate: (db, ids, data) => multiUpdate(db, ids, data, schema),
-        comparePassword: (db, id, password) => comparePassword(db, schema, id, password)
+        comparePassword: (db, id, password) => comparePassword(db, schema, id, password),
+        readFolder,
     }
   };
